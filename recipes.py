@@ -1,12 +1,19 @@
+"""
+A script for scraping recipe data from AllRecipes.
+As of 2022-11-06, script is not working - AllRecipes changed class names.
+"""
 import csv
-
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, ElementNotInteractableException
 from selenium.webdriver.common.by import By
 import re
+from dotenv import dotenv_values
+
+WEBSITE = "allrecipes"
 
 # setup
-DRIVER = "/home/wiktor/web/geckodriver/geckodriver"
+env_config = dotenv_values(".env")
+DRIVER = env_config["DRIVER"]
 SOURCES = ["https://www.allrecipes.com/recipes/15334/healthy-recipes/breakfast-and-brunch/",
            "https://www.allrecipes.com/recipes/16376/healthy-recipes/lunches/",
            "https://www.allrecipes.com/recipes/1320/healthy-recipes/main-dishes/",
@@ -27,7 +34,17 @@ data = {}
 for source in SOURCES:
     driver.get(source)
     main_window = driver.current_window_handle
-    recipes = driver.find_elements(By.CSS_SELECTOR, "div.card__detailsContainer-left a.card__titleLink")
+
+    # handle cookies popup
+    try:
+        cookie = driver.find_element(By.ID, "onetrust-reject-all-handler")
+    except ElementNotInteractableException:
+        pass
+    else:
+        cookie.click()
+
+    recipes = driver.find_elements(By.CSS_SELECTOR, "a.comp")
+    print(recipes)
 
     for recipe in recipes:
         try:
@@ -46,7 +63,7 @@ for source in SOURCES:
             except NoSuchElementException:
                 continue
             # find nutrition data and match with regular expression to find macros
-            m = re.match(r"(\d+)\D+(\d+\.?\d?)\D+(\d+\.?\d?)\D+(\d+\.?\d?)", nutrition.text)
+            m = re.match(r"(\d+)\D+(\d+\.?\d?)\D+(\d+\.?\d?)\D+(\d+\.?\d?)", nutrition.text)  # probably can improve
             data[name] = {'name': name,
                           'calories': m.group(1),
                           'protein': m.group(2),
@@ -60,7 +77,7 @@ for source in SOURCES:
 driver.close()
 
 # write into csv
-with open('recipes.csv', 'w', newline='') as csv_file:
+with open(f'recipes_{WEBSITE}.csv', 'w', newline='') as csv_file:
     field_names = ['name', 'calories', 'protein', 'carbohydrates', 'fat', 'link']
     writer = csv.DictWriter(csv_file, fieldnames=field_names)
 
